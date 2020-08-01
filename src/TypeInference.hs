@@ -6,6 +6,7 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.List(intersperse)
 import Ast
+import Data.Maybe(isJust)
 
 flipInOut :: Monad m => [m a] -> m [a]
 flipInOut [] = return []
@@ -106,10 +107,17 @@ infer :: Gamma -> Expr -> InferState Type
 infer _ (Bool _) = return  boolType
 infer _ (Int _) = return intType
 infer gamma (Var name) = lookupGamma name gamma >>= inst
-infer gamma (Lamb xs body) = do
-    m <- genTVars xs
-    t <- infer (M.fromList m : gamma) body
-    return $ TFunc (fmap snd m) t
+infer gamma (Lamb xs body) = r where 
+    getBoundTVars s b [] = b
+    getBoundTVars s b ((TVar x):xs) = getBoundTVars (S.insert x s) (if x `S.member` s then b else x:b) xs
+    getBoundTVars s b (x:xs) = getBoundTVars s b xs
+    r = do
+        m <- genTVars xs
+        tbody <- infer (M.fromList m : gamma) body
+        tparams <- flipInOut $ fmap (find . snd) m
+        let boundTVars = getBoundTVars S.empty [] (tbody: tparams)
+        let tf = TFunc tparams tbody
+        return $ Forall boundTVars $ TFunc tparams tbody
 infer gamma (App f args) = do
     tf <- infer gamma f
     targs <- flipInOut $ fmap (infer gamma) args
@@ -123,7 +131,6 @@ infer gamma (Let bindings body) = do
 infer gamma (Block defs expr) = do
     m <- inferDefs gamma defs
     infer (m:gamma) expr
-
 infer gamma (If a b c) = do
     ta <- infer gamma a
     tb <- infer gamma a
