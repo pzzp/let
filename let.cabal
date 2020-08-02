@@ -29,6 +29,7 @@ library
   exposed-modules:
       Ast
       TypeInference
+      Parser
   other-modules:
       Paths_let
   hs-source-dirs:
@@ -37,6 +38,7 @@ library
       base >=4.7 && <5
      ,mtl >=2 && <3
      ,containers >=0.6 && <1
+     ,megaparsec
   default-language: Haskell2010
 
 executable let-exe
