@@ -1,80 +1,90 @@
 module Parser where
 
 import qualified Ast as A
-import Data.Void
-import Text.Megaparsec
-import Text.Megaparsec.Char
-import qualified Text.Megaparsec.Char.Lexer as L
+import Text.ParserCombinators.Parsec
+import Text.ParserCombinators.Parsec.Expr
+import Text.ParserCombinators.Parsec.Language
+import qualified Text.ParserCombinators.Parsec.Token as T
+import Control.Monad (liftM, liftM2)
 
-type Parser = Parsec Void String
+languageDef = emptyDef {
+    T.commentLine = ";"
+   ,T.identStart = letter <|> char '_'
+   ,T.identLetter = alphaNum <|> char '_'
+   ,T.reservedNames = ["if", "then", "else", "true", "false", "let", "def", "fun", "and", "or", "not", "in"]
+}
 
-sc :: Parser ()
-sc = L.space space1 (L.skipLineComment ";") empty
+lexer = T.makeTokenParser languageDef
+ident = T.identifier lexer
+reserved = T.reserved lexer
+reservedOp = T.reservedOp lexer
+parens = T.parens lexer
+int = T.integer lexer
+space = T.whiteSpace lexer
+braces = T.braces lexer
+commaSep = T.commaSep lexer
+comma = T.comma lexer
 
-lexeme = L.lexeme sc
+prefixOp s = Prefix $ reservedOp s >> (return $ A.UnOp s)
+infixOp s = Infix (reservedOp s >> return (A.BinOp s)) AssocLeft
 
-symbol = L.symbol sc
+operators = [
+    [prefixOp "-", prefixOp "not"]
+   ,[infixOp "*", infixOp "/"]
+   ,[infixOp "+", infixOp "-"]
+   ,[infixOp "<", infixOp ">", infixOp "<=", infixOp ">="]
+   ,[infixOp "==", infixOp "!="]
+   ,[infixOp "and"]
+   ,[infixOp "or"]]
 
-inparen = between (symbol "(")  (symbol ")")
+topExpr = buildExpressionParser operators term
 
-ident = lexeme $ (:) <$> (char1 <|> letterChar) <*> (many $ char1 <|> alphaNumChar) where
-    char1 = oneOf "+-*/<=>&|~.#:"
+term = do
+    f <- atom
+    args <- many $ parens $ commaSep topExpr  -- f(e1, e2)(e3,e4)(e5, e6, ...)
+    return $ foldl A.App f args
 
-int = A.Int . fromIntegral <$> L.signed space1 (lexeme L.decimal)
 
-bool = A.Bool <$> ((\_ -> True) <$> symbol "true" <|> (\_ -> False) <$> symbol "false")
+atom = parens topExpr
+   <|> A.Int . fromInteger <$> int
+   <|> (reservedOp "true" >> return (A.Bool True))
+   <|> (reservedOp "false" >> return (A.Bool False))
+   <|> lamb
+   <|> block
+   <|> letExpr
+   <|> ifExpr
+   <|> liftM A.Var ident
 
-var = A.Var <$> ident
-
-lamb = inparen $ do
-    symbol "lambda" <|> symbol "λ"
-    xs <- inparen $ many ident
-    body <- exprParser
-    return $ A.Lamb xs body
-app = inparen $ do
-    f <- exprParser
-    args <- many exprParser
-    return $ A.App f args
-
-letExpr = inparen $ do
-    symbol "let"
-    let binding = do
-        name <- ident
-        v <- exprParser
-        return (name, v)
-    bindings <- many $ inparen binding
-    body <- exprParser
-    return $ A.Let bindings body
-
-block = inparen $ do
-    defs <- many (def1 <|> def2)
-    r <- exprParser
-    return $ A.Block defs r
-
-ifExpr = inparen $ do
-    symbol "if"
-    a <- exprParser
-    b <- exprParser
-    c <- exprParser
+ifExpr = do
+    reserved "if"
+    a <- topExpr
+    b <- topExpr
+    c <- topExpr
     return $ A.If a b c
 
-exprParser =  bool <|> int <|> var <|> lamb <|> app <|> letExpr <|> block <|> ifExpr
+letExpr = do
+    reserved "let"
+    let b = liftM2 (,) (ident <* reservedOp "=") topExpr
+    firstBinding <- b
+    restBinding <- many $ try $ comma *> b
+    optional comma
+    reserved "in"
+    body <- topExpr
+    return $ A.Let (firstBinding:restBinding) body
 
-def1 = inparen $ do
+block = braces $ liftM2 A.Block (many def) topExpr
+
+lamb = reserved "fun" *> liftM2 A.Lamb (commaSep ident <* reserved "=>") topExpr
+
+def = do
+    reserved "def"
     name <- ident
-    e <- exprParser
-    return $ A.Def name e
+    params <- optionMaybe $ parens $ commaSep ident
+    reservedOp "="
+    body <- topExpr
+    return $ A.Def name $ case params of
+        Just params -> A.Lamb params body
+        Nothing -> body
 
-def2 = inparen $ do
-    (name, params) <-inparen $ (,) <$> ident <*> many ident
-    body <- exprParser
-    return $ A.Def name $ A.Lamb params body
 
-
-parseExpr1 = parse exprParser "test" 
-parseDef1 = parse (def1 <|> def2) "test" 
-
-parse1 = parse
-
-integer       = lexeme L.decimal
-signedInteger = L.signed (L.space empty empty empty) integer
+parserInRepl = spaces *> (liftM Left def <|> liftM Right topExpr) <* eof

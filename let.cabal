@@ -38,7 +38,8 @@ library
       base >=4.7 && <5
      ,mtl >=2 && <3
      ,containers >=0.6 && <1
-     ,megaparsec
+     ,parsec
+     ,QuickCheck -- hls in vscode cannot detect dependency in test-suit ≧ ﹏ ≦
   default-language: Haskell2010
 
 executable let-exe
@@ -64,4 +65,5 @@ test-suite let-test
   build-depends:
       base >=4.7 && <5
     , let
+    , QuickCheck
   default-language: Haskell2010
