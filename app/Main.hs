@@ -14,9 +14,9 @@ main = do
         Left err -> print err
         Right (Left def) -> do
             print def
-            case doInferDefs [def] of
+            case doInferDef def of
                 Left err -> print err
-                Right (_, t) -> print (head t)
+                Right (t, _, _) -> print t
         Right (Right expr) -> do
             print expr
             case doInfer expr of

@@ -1,6 +1,6 @@
 module Parser where
 
-import qualified Ast as A
+import qualified Lang as A
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Expr
 import Text.ParserCombinators.Parsec.Language
@@ -81,10 +81,10 @@ block = braces $ liftM2 A.Block (many def) topExpr
 
 lamb = do
     reserved "fun"
-    params <- parens $ commaSep ident
+    params <- (parens $ commaSep ident) <|> (fmap (:[]) ident)
     reservedOp "=>"
     body <- topExpr
-    return $ A.Lamb A.toBeTyped params body
+    return $ A.Lamb params body
 
 
 def = do
@@ -93,8 +93,8 @@ def = do
     params <- optionMaybe $ parens $ commaSep ident
     reservedOp "="
     body <- topExpr
-    return $ A.Def A.toBeTyped name $ case params of
-        Just params -> A.Lamb A.toBeTyped params body
+    return $ (,,) A.toBeTyped name $ case params of
+        Just params -> A.Lamb params body
         Nothing -> body
 
 

@@ -1,4 +1,4 @@
-module Ast where
+module Lang where
 
 import Data.List(intersperse)
 
@@ -6,9 +6,9 @@ data Expr =
     Int Int
    |Bool Bool
    |Var Type String
-   |Lamb Type [String] Expr
+   |Lamb [String] Expr
    |App Expr [Expr]
-   |Let [(Type, String, Expr)] Expr
+   |Let [Binding] Expr
    |Block [Def] Expr
    |If Expr Expr Expr
    |UnOp String Expr
@@ -16,8 +16,9 @@ data Expr =
    deriving (Eq, Show)
 
 
-data Def = Def {type_::Type, name::String, expr::Expr } deriving(Eq, Show)
+type Binding = (Type, String, Expr)
 
+type Def = Binding
 
 data Type = 
     TCons String
@@ -25,6 +26,13 @@ data Type =
    |TVar Int
    |Forall [Int] Type
    deriving (Eq)
+
+
+getBindingName :: Binding -> String
+getBindingName (_, name, _) = name
+
+getBindingType :: Binding -> Type
+getBindingType (t, _, _) = t
 
 showTVar x = if x == -1 then "" else if x < 26 then [toEnum (fromEnum 'a' + x)] else "t" ++ show (x - 26)
 
