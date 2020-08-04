@@ -140,11 +140,31 @@ infer gamma (If a b c) = do
     unify tb tc
     t <- find tc
     return (t, If a b c)
-infer gamma (UnOp "-" expr) = do
+infer gamma (UnOp op expr) = do
     (t, e) <- infer gamma expr
-    unify intType t
-    t <- find t
-    return (t, UnOp "-" e)
+    let (te, tr) = primUnOpType op
+    unify te t
+    return (tr, UnOp op e)
+infer gamma (BinOp op e1 e2) = do
+    (t1, e1) <- infer gamma e1
+    (t2, e2) <- infer gamma e2
+    let ((ta, tb), tr) = primBinOpType op
+    unify ta t1
+    unify tb t2
+    return (tr, BinOp op e1 e2)
+
+primUnOpType "-" = (intType, intType)
+primUnOpType "not" = (boolType, boolType)
+
+primBinOpType x = 
+    if x `elem` words "+ - * /"
+    then ((intType, intType), intType)
+    else if x `elem` words "< <= == >= > != "
+        then ((intType, intType),boolType)
+        else if x `elem` words "and or"
+            then ((boolType, boolType), boolType)
+            else error (x ++ " is not operator")
+
 
 inferDefs :: Gamma -> [Def] -> InferState (M.Map String Type, [Def])
 inferDefs gamma defs = do
