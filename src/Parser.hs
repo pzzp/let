@@ -8,7 +8,7 @@ import qualified Text.ParserCombinators.Parsec.Token as T
 import Control.Monad (liftM, liftM2)
 
 languageDef = emptyDef {
-    T.commentLine = ";"
+    T.commentLine = "#"
    ,T.identStart = letter <|> char '_'
    ,T.identLetter = alphaNum <|> char '_'
    ,T.reservedNames = ["if", "then", "else", "true", "false", "let", "def", "fun", "and", "or", "not", "in"]
@@ -53,18 +53,23 @@ atom = parens topExpr
    <|> block
    <|> letExpr
    <|> ifExpr
-   <|> liftM A.Var ident
+   <|> liftM (A.Var A.toBeTyped) ident
 
 ifExpr = do
     reserved "if"
     a <- topExpr
+    reserved "then"
     b <- topExpr
+    reserved "else"
     c <- topExpr
     return $ A.If a b c
 
+mkBinding a b = (A.toBeTyped, a, b) 
+
 letExpr = do
+    let mkBinding a b = (A.toBeTyped, a, b) 
     reserved "let"
-    let b = liftM2 (,) (ident <* reservedOp "=") topExpr
+    let b = liftM2 mkBinding (ident <* reservedOp "=") topExpr
     firstBinding <- b
     restBinding <- many $ try $ comma *> b
     optional comma
@@ -74,7 +79,13 @@ letExpr = do
 
 block = braces $ liftM2 A.Block (many def) topExpr
 
-lamb = reserved "fun" *> liftM2 A.Lamb (commaSep ident <* reserved "=>") topExpr
+lamb = do
+    reserved "fun"
+    params <- parens $ commaSep ident
+    reservedOp "=>"
+    body <- topExpr
+    return $ A.Lamb A.toBeTyped params body
+
 
 def = do
     reserved "def"
@@ -82,9 +93,11 @@ def = do
     params <- optionMaybe $ parens $ commaSep ident
     reservedOp "="
     body <- topExpr
-    return $ A.Def name $ case params of
-        Just params -> A.Lamb params body
+    return $ A.Def A.toBeTyped name $ case params of
+        Just params -> A.Lamb A.toBeTyped params body
         Nothing -> body
 
 
 parserInRepl = spaces *> (liftM Left def <|> liftM Right topExpr) <* eof
+
+parse1 = parse parserInRepl "stdin"
