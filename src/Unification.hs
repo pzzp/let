@@ -45,7 +45,7 @@ lookupGamma s g = lookupGamma' s (fst g) where
         Just t -> return t
 
 union :: Int -> Type -> InferState ()
-union k t = do
+union k t = if TVar k == t then return () else do
     (subst, g) <- get
     let subst' = M.insert k t subst
     put (subst', g)
