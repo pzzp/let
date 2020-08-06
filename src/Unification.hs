@@ -128,13 +128,14 @@ infer _ e@(Int _) = return (intType, e)
 infer gamma e@(Var _ name) = do
     t <- lookupGamma name gamma >>= inst
     return (t, e)
-infer gamma (Lamb params body) = do
+infer gamma (Lamb _ params body) = do
     checkDup params
     ts <- genTVars params
     let gamma' =  extendGamma ts gamma
     (tbody, body) <- infer gamma' body
     tparams <- flipInOut $ fmap (find . snd) ts
-    return (TFunc tparams tbody, Lamb params body)
+    let t = TFunc tparams tbody
+    return (t, Lamb t params body)
 infer gamma (App f args) = do
     (tf, f) <- infer gamma f
     (targs, args) <- unzip <$> (flipInOut $ fmap (infer gamma) args)

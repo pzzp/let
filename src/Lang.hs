@@ -6,7 +6,7 @@ data Expr =
     Int Int
    |Bool Bool
    |Var Type String
-   |Lamb [String] Expr
+   |Lamb Type [String] Expr
    |App Expr [Expr]
    |Block [Binding] Expr
    |If Expr Expr Expr
