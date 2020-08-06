@@ -24,17 +24,9 @@ emptyGamma = ([M.empty], S.empty)
 tFreeVarInGamma :: Gamma -> S.Set Int
 tFreeVarInGamma gamma = snd gamma
 
-tFreeVar :: S.Set Int -> Type -> S.Set Int
-tFreeVar = tFreeVar' S.empty 
-
-tFreeVar' :: S.Set Int -> S.Set Int -> Type -> S.Set Int
-tFreeVar' boundTVars freeTVars (TVar x) = if x `S.member` boundTVars then freeTVars else S.insert x freeTVars
-tFreeVar' boundTVars freeTVars (TFunc tparams tbody) = foldl (tFreeVar' boundTVars) freeTVars (tbody:tparams)
-tFreeVar' boundTVars freeTVars (Forall bs t) = tFreeVar' (foldr S.insert boundTVars bs) freeTVars t
-tFreeVar' _ freeTVars _ = freeTVars
 
 extendGamma :: [(String, Type)] -> Gamma -> Gamma
-extendGamma ms (env, fv) = (M.fromList ms : env, foldl tFreeVar fv (map snd ms)) 
+extendGamma ms (env, fv) = (M.fromList ms : env, foldl getTFreeVar fv (map snd ms)) 
 
 lookupGamma :: String -> Gamma -> InferState Type
 lookupGamma s g = lookupGamma' s (fst g) where
@@ -68,7 +60,7 @@ inst = inst' S.empty where
 
 generalize :: Gamma -> Type -> Type 
 generalize gamma t = 
-    case S.toList $ tFreeVar' (tFreeVarInGamma gamma) S.empty t of
+    case S.toList $ getTFreeVar' (tFreeVarInGamma gamma) S.empty t of
         [] -> t
         bs -> Forall bs t
 
