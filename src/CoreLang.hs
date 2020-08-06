@@ -19,7 +19,7 @@ data Expr = Var String
           | App Expr [Expr]
           | TApp Expr [Type]
           | LetR [(String, Type, Expr)] Expr
-          | Case [(Pat, Expr)]
+          | Case Expr [(Pat, Expr)]
        deriving(Show, Eq)
 
 data Pat = C (Cons Pat)
