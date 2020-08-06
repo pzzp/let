@@ -4,7 +4,6 @@ import Control.Monad.Except
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Lang
-import Debug.Trace (trace)
 import Data.List (intersperse, partition)
 
 
@@ -195,7 +194,7 @@ inferBindings gamma bindings = do
     if infvalues /= [] then
         throwError $ "Cannot create infinite value: " ++ (concat $ intersperse ", " infvalues)
     else
-        trace ("trace1 " ++ show infvalues) return bindings'
+        return bindings'
 
 inferBinding :: Gamma -> Binding -> InferState Binding
 inferBinding gamma (_, name, expr) = do
