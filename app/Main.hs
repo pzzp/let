@@ -2,6 +2,7 @@ module Main where
 import Unification
 import Parser
 import System.IO
+import Lang
 -- import Debug.Trace (trace)
 
 main :: IO ()
@@ -12,11 +13,11 @@ main = do
     let expr = parse1 src
     case expr of
         Left err -> print err
-        Right (Left def) -> do
-            print def
-            case doInferDef def of
+        Right (Left defs) -> do
+            print defs
+            case doInferDefs defs of
                 Left err -> print err
-                Right (t, _, _) -> print t
+                Right bs -> print $ map getBindingType bs
         Right (Right expr) -> do
             print expr
             case doInfer expr of

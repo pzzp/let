@@ -91,6 +91,6 @@ binding = def <|> let_ where
         return (A.toBeTyped, name, body)
 
 
-parserInRepl = spaces *> (liftM Left binding <|> liftM Right topExpr) <* eof
+parserInRepl = spaces *> (liftM Right topExpr <|> liftM Left (many binding)) <* eof
 
 parse1 = parse parserInRepl "stdin"

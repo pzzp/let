@@ -5,6 +5,7 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import Lang
 import Debug.Trace (trace)
+import Data.List (intersperse, partition)
 
 
 flipInOut :: Monad m => [m a] -> m [a]
@@ -67,7 +68,10 @@ inst = inst' S.empty where
     inst' _ t = return t
 
 generalize :: Gamma -> Type -> Type 
-generalize gamma t = Forall (S.toList $ tFreeVar' (tFreeVarInGamma gamma) S.empty t) t
+generalize gamma t = 
+    case S.toList $ tFreeVar' (tFreeVarInGamma gamma) S.empty t of
+        [] -> t
+        bs -> Forall bs t
 
 unify :: Type -> Type -> InferState ()
 unify a b = do
@@ -175,6 +179,8 @@ primBinOpType x =
             then ((boolType, boolType), boolType)
             else error (x ++ " is not operator")
 
+isTVar (TVar _) = True
+isTVar _ = False
 
 inferBindings :: Gamma -> [Binding] -> InferState [Binding]
 inferBindings gamma bindings = do
@@ -182,7 +188,14 @@ inferBindings gamma bindings = do
     checkDup names
     ms <- genTVars names
     let gamma' = extendGamma ms gamma
-    flipInOut $ fmap (inferBinding gamma') bindings
+    bindings <- flipInOut $ fmap (inferBinding gamma') bindings
+    types <- flipInOut $ fmap (find . getBindingType) bindings
+    let bindings' = map (\((_, name, body), t) -> (t, name, body)) (zip bindings types)
+    let infvalues = map (\(_, name, _) -> name) $ filter (\(t, _, _) -> isTVar t) bindings'
+    if infvalues /= [] then
+        throwError $ "Cannot create infinite value: " ++ (concat $ intersperse ", " infvalues)
+    else
+        trace ("trace1 " ++ show infvalues) return bindings'
 
 inferBinding :: Gamma -> Binding -> InferState Binding
 inferBinding gamma (_, name, expr) = do
