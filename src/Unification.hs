@@ -139,9 +139,6 @@ infer gamma (App f args) = do
     unify tf (TFunc targs tr)
     tr <- find tr
     return (tr, App f args)
-infer gamma (Let bindings body) = do
-    (tbody, bindings, body) <- inferBlockExpr gamma bindings body
-    return (tbody, Let bindings body)
 infer gamma (Block defs expr) = do
     (tbody, bindings, body) <- inferBlockExpr gamma defs expr
     return (tbody, Block bindings body)
@@ -179,7 +176,7 @@ primBinOpType x =
             else error (x ++ " is not operator")
 
 
-inferBindings :: Gamma -> [Def] -> InferState [Binding]
+inferBindings :: Gamma -> [Binding] -> InferState [Binding]
 inferBindings gamma bindings = do
     let names = fmap getBindingName bindings
     checkDup names

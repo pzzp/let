@@ -8,8 +8,7 @@ data Expr =
    |Var Type String
    |Lamb [String] Expr
    |App Expr [Expr]
-   |Let [Binding] Expr
-   |Block [Def] Expr
+   |Block [Binding] Expr
    |If Expr Expr Expr
    |UnOp String Expr
    |BinOp String Expr Expr
@@ -17,8 +16,6 @@ data Expr =
 
 
 type Binding = (Type, String, Expr)
-
-type Def = Binding
 
 data Type = 
     TCons String

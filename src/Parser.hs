@@ -51,7 +51,6 @@ atom = parens topExpr
    <|> (reservedOp "false" >> return (A.Bool False))
    <|> lamb
    <|> block
-   <|> letExpr
    <|> ifExpr
    <|> liftM (A.Var A.toBeTyped) ident
 
@@ -66,18 +65,7 @@ ifExpr = do
 
 mkBinding a b = (A.toBeTyped, a, b) 
 
-letExpr = do
-    let mkBinding a b = (A.toBeTyped, a, b) 
-    reserved "let"
-    let b = liftM2 mkBinding (ident <* reservedOp "=") topExpr
-    firstBinding <- b
-    restBinding <- many $ try $ comma *> b
-    optional comma
-    reserved "in"
-    body <- topExpr
-    return $ A.Let (firstBinding:restBinding) body
-
-block = braces $ liftM2 A.Block (many def) topExpr
+block = braces $ liftM2 A.Block (many binding) topExpr
 
 lamb = do
     reserved "fun"
@@ -87,17 +75,22 @@ lamb = do
     return $ A.Lamb params body
 
 
-def = do
-    reserved "def"
-    name <- ident
-    params <- optionMaybe $ parens $ commaSep ident
-    reservedOp "="
-    body <- topExpr
-    return $ (,,) A.toBeTyped name $ case params of
-        Just params -> A.Lamb params body
-        Nothing -> body
+binding = def <|> let_ where 
+    def = do
+        reserved "def"
+        name <- ident
+        params <- parens $ commaSep ident
+        reservedOp "="
+        body <- topExpr
+        return (A.toBeTyped, name, A.Lamb params body)
+    let_ = do
+        reserved "let"
+        name <- ident
+        reservedOp "="
+        body <- topExpr
+        return (A.toBeTyped, name, body)
 
 
-parserInRepl = spaces *> (liftM Left def <|> liftM Right topExpr) <* eof
+parserInRepl = spaces *> (liftM Left binding <|> liftM Right topExpr) <* eof
 
 parse1 = parse parserInRepl "stdin"
