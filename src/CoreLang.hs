@@ -8,7 +8,7 @@ import Type
 newtype V = V Int deriving(Eq)
 
 instance Show V where
-       show (V i) = '$' : show i
+       show (V i) = if i < 0 then '$' : show (-i) else '%' : show i
 
 data Cons a = Int Int
             | Bool Bool
