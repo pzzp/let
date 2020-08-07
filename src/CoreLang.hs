@@ -1,24 +1,27 @@
-module CoreLang ( ID
+module CoreLang ( V
                 , Cons(..)
                 , Expr(..)
                 , module Type
                 , Pat) where
 import Type
 
-type ID = Int
+newtype V = V Int deriving(Eq)
+
+instance Show V where
+       show (V i) = '$' : show i
 
 data Cons a = Int Int
             | Bool Bool
        deriving(Show, Eq)
 
-data Expr = Var String
+data Expr = Var V
           | Val (Cons Expr)
           | OP String [Expr]
-          | Abs [(String, Type)] Expr 
-          | TAbs [ID] Expr
+          | Abs [(V, Type)] Expr 
+          | TAbs [TV] Expr
           | App Expr [Expr]
           | TApp Expr [Type]
-          | LetR [(String, Type, Expr)] Expr
+          | LetR [(V, Type, Expr)] Expr
           | Case Expr [(Pat, Expr)]
        deriving(Show, Eq)
 

@@ -2,12 +2,13 @@ module Type where
 import Data.List (intersperse)
 import qualified Data.Set as S
 
+type TV = Int
 
 data Type = 
     TCons String
    |TFunc [Type] Type
-   |TVar Int
-   |Forall [Int] Type
+   |TVar TV
+   |Forall [TV] Type
    deriving (Eq)
 
 showTVar x = if x == -1 then "" else if x < 26 then [toEnum (fromEnum 'a' + x)] else "t" ++ show (x - 26)
@@ -28,11 +29,11 @@ intType = TCons "Int"
 toBeTyped = TVar (-1)
 
 
-getTFreeVar :: S.Set Int -> Type -> S.Set Int
-getTFreeVar = getTFreeVar' S.empty 
+getFreeTVar :: S.Set TV -> Type -> S.Set TV
+getFreeTVar = getFreeTVar' S.empty 
 
-getTFreeVar' :: S.Set Int -> S.Set Int -> Type -> S.Set Int
-getTFreeVar' boundTVars freeTVars (TVar x) = if x `S.member` boundTVars then freeTVars else S.insert x freeTVars
-getTFreeVar' boundTVars freeTVars (TFunc tparams tbody) = foldl (getTFreeVar' boundTVars) freeTVars (tbody:tparams)
-getTFreeVar' boundTVars freeTVars (Forall bs t) = getTFreeVar' (foldr S.insert boundTVars bs) freeTVars t
-getTFreeVar' _ freeTVars _ = freeTVars
+getFreeTVar' :: S.Set TV -> S.Set TV -> Type -> S.Set TV
+getFreeTVar' boundTVars freeTVars (TVar x) = if x `S.member` boundTVars then freeTVars else S.insert x freeTVars
+getFreeTVar' boundTVars freeTVars (TFunc tparams tbody) = foldl (getFreeTVar' boundTVars) freeTVars (tbody:tparams)
+getFreeTVar' boundTVars freeTVars (Forall bs t) = getFreeTVar' (foldr S.insert boundTVars bs) freeTVars t
+getFreeTVar' _ freeTVars _ = freeTVars

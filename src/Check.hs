@@ -1,4 +1,4 @@
-module Unification where
+module Check where
 import Control.Monad.State
 import Control.Monad.Except
 import qualified Data.Map as M
@@ -26,7 +26,7 @@ tFreeVarInGamma gamma = snd gamma
 
 
 extendGamma :: [(String, Type)] -> Gamma -> Gamma
-extendGamma ms (env, fv) = (M.fromList ms : env, foldl getTFreeVar fv (map snd ms)) 
+extendGamma ms (env, fv) = (M.fromList ms : env, foldl getFreeTVar fv (map snd ms)) 
 
 lookupGamma :: String -> Gamma -> InferState Type
 lookupGamma s g = lookupGamma' s (fst g) where
@@ -60,7 +60,7 @@ inst = inst' S.empty where
 
 generalize :: Gamma -> Type -> Type 
 generalize gamma t = 
-    case S.toList $ getTFreeVar' (tFreeVarInGamma gamma) S.empty t of
+    case S.toList $ getFreeTVar' (tFreeVarInGamma gamma) S.empty t of
         [] -> t
         bs -> Forall bs t
 

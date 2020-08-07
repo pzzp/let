@@ -1,5 +1,5 @@
 module Main where
-import Unification
+import Check
 import Parser
 import System.IO
 import Lang
