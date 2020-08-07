@@ -1,8 +1,8 @@
-module CoreLang ( V
+module CoreLang ( V(..)
                 , Cons(..)
                 , Expr(..)
                 , module Type
-                , Pat) where
+                , Pat(..)) where
 import Type
 
 newtype V = V Int deriving(Eq)
