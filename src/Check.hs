@@ -54,25 +54,33 @@ genTVar = do
     return tv
 
 inst :: Type -> InferState Type
-inst = inst' S.empty where
-    inst' s t@(TVar x) = if x `S.member` s then TVar <$> genTVar else return t
-    inst' s (TFunc p r) = do
-        p <- flipInOut $ fmap (inst' s) p
-        r <- inst' s r
+inst = inst' M.empty where
+    inst' m t@(TVar x) = 
+        return $ case M.lookup x m of
+            Just t ->  TVar t
+            Nothing -> t
+    inst' m (TFunc p r) = do
+        p <- flipInOut $ fmap (inst' m) p
+        r <- inst' m r
         return $ TFunc p r
-    inst' s (Forall x b) = inst' (foldr S.insert s x) b
+    inst' m (Forall bs b) = do 
+        let (bs', monads) = unzip $ (zip bs $ repeat genTVar)
+        newtv <- flipInOut monads
+        let ins (a, b) =  M.insert a b
+        let m' = foldr ins m $ zip bs' newtv
+        inst' m' b
     inst' _ t = return t
 
 generalize :: Gamma -> Type -> Type 
 generalize gamma t = 
-    case filter (isFreeTVarOfGamma gamma) $ S.toList $ getFreeTVar S.empty t of
+    case filter (not . isFreeTVarOfGamma gamma) $ S.toList $ getFreeTVar S.empty t of
         [] -> t
         bs -> Forall bs t
 
 unify :: Type -> Type -> InferState ()
 unify a b = do
-    a <- inst a >>= find
-    b <- inst b >>= find
+    a <- find a
+    b <- find a
     unify' a b where
         unify' (TVar a) y = union a y
         unify' x (TVar b) = union b x
