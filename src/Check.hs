@@ -5,6 +5,7 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import Lang
 import Data.List (intersperse, partition)
+import Debug.Trace (trace)
 
 
 flipInOut :: Monad m => [m a] -> m [a]
@@ -14,22 +15,26 @@ flipInOut (x:xs) = do
     xs <- flipInOut xs
     return $ x:xs
 
-type Gamma = ([M.Map String Type], S.Set Int)
+type Gamma = [(M.Map String Type, S.Set Int)]
 type Subst =  M.Map Int Type
 type InferState = ExceptT String (State (Subst, Int))
 
-emptyGamma :: ([M.Map k a1], S.Set a2)
-emptyGamma = ([M.empty], S.empty)
 
-tFreeVarInGamma :: Gamma -> S.Set Int
-tFreeVarInGamma gamma = snd gamma
+isFreeTVarOfGamma :: Gamma -> Int -> Bool
+isFreeTVarOfGamma [] _ = False
+isFreeTVarOfGamma ((_, fv):xs) x = 
+    if x `S.member` fv then True
+    else isFreeTVarOfGamma xs x
 
 
 extendGamma :: [(String, Type)] -> Gamma -> Gamma
-extendGamma ms (env, fv) = (M.fromList ms : env, foldl getFreeTVar fv (map snd ms)) 
+extendGamma ms g = 
+    let fv = foldl getFreeTVar S.empty (map snd ms) 
+        env = M.fromList ms
+    in (env, fv) : g
 
 lookupGamma :: String -> Gamma -> InferState Type
-lookupGamma s g = lookupGamma' s (fst g) where
+lookupGamma s g = lookupGamma' s (map fst g) where
     lookupGamma' :: String -> [M.Map String Type] -> InferState Type
     lookupGamma' s [] = throwError $ "cannot find variable " ++ s
     lookupGamma' s (d:ds) = case M.lookup s d of
@@ -60,7 +65,7 @@ inst = inst' S.empty where
 
 generalize :: Gamma -> Type -> Type 
 generalize gamma t = 
-    case S.toList $ getFreeTVar' (tFreeVarInGamma gamma) S.empty t of
+    case filter (isFreeTVarOfGamma gamma) $ S.toList $ getFreeTVar S.empty t of
         [] -> t
         bs -> Forall bs t
 
@@ -127,7 +132,7 @@ infer gamma (Lamb _ params body) = do
     (tbody, body) <- infer gamma' body
     tparams <- flipInOut $ fmap (find . snd) ts
     let t = TFunc tparams tbody
-    return (t, Lamb t params body)
+    return (t, Lamb (generalize gamma t) params body)
 infer gamma (App f args) = do
     (tf, f) <- infer gamma f
     (targs, args) <- unzip <$> (flipInOut $ fmap (infer gamma) args)
@@ -172,6 +177,7 @@ primBinOpType x =
             else error (x ++ " is not operator")
 
 isTVar (TVar _) = True
+isTVar (Forall _ (TVar _)) = True
 isTVar _ = False
 
 inferBindings :: Gamma -> [Binding] -> InferState [Binding]
@@ -182,12 +188,11 @@ inferBindings gamma bindings = do
     let gamma' = extendGamma ms gamma
     bindings <- flipInOut $ fmap (inferBinding gamma') bindings
     types <- flipInOut $ fmap (find . getBindingType) bindings
-    let bindings' = map (\((_, name, body), t) -> (t, name, body)) (zip bindings types)
-    let infvalues = map (\(_, name, _) -> name) $ filter (\(t, _, _) -> isTVar t) bindings'
+    let infvalues = map (\(_, name, _) -> name) $ filter (\(t, _, _) -> isTVar t) bindings
     if infvalues /= [] then
         throwError $ "Cannot create infinite value: " ++ (concat $ intersperse ", " infvalues)
     else
-        return bindings'
+        return bindings
 
 inferBinding :: Gamma -> Binding -> InferState Binding
 inferBinding gamma (_, name, expr) = do
@@ -208,8 +213,8 @@ inferBlockExpr gamma bindings body = do
 
 
 doInfer :: Expr -> Either String (Type, Expr)
-doInfer e = evalState (runExceptT $ infer emptyGamma e) (M.empty, 0)
+doInfer e = evalState (runExceptT $ infer [] e) (M.empty, 0)
 
 doInferDef def = fmap head $ doInferDefs [def] 
 
-doInferDefs defs = evalState (runExceptT $ inferBindings emptyGamma defs) (M.empty, 0)
+doInferDefs defs = evalState (runExceptT $ inferBindings [] defs) (M.empty, 0)
