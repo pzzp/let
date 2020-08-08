@@ -2,7 +2,10 @@ module Type where
 import Data.List (intersperse)
 import qualified Data.Set as S
 
-type TV = Int
+newtype TV = TV Int deriving (Eq, Ord)
+
+instance Show TV where
+    show (TV x) = if x == -1 then "" else if x < 26 then [toEnum (fromEnum 'a' + x)] else "t" ++ show (x - 26)
 
 data Type = 
     TCons String
@@ -11,22 +14,21 @@ data Type =
    |Forall [TV] Type
    deriving (Eq)
 
-showTVar x = if x == -1 then "" else if x < 26 then [toEnum (fromEnum 'a' + x)] else "t" ++ show (x - 26)
 
 instance Show Type where
     show (TCons t) = t
     show (TFunc xs r) = "(" ++ (concat $ intersperse ", " $ map show xs) ++ ")" ++ "->" ++ show r
-    show (TVar x) = showTVar x
+    show (TVar x) = show x
     show (Forall xs t) = case xs of
         [] -> show t
-        [x] -> "∀ " ++ showTVar x ++ ": " ++ show t
-        _ -> "∀(" ++ concat (intersperse ", " (map showTVar xs)) ++ "): " ++ show t
+        [x] -> "∀ " ++ show x ++ ": " ++ show t
+        _ -> "∀(" ++ concat (intersperse ", " (map show xs)) ++ "): " ++ show t
 
 boolType = TCons "Bool"
 
 intType = TCons "Int"
 
-toBeTyped = TVar (-1)
+toBeTyped = TVar $ TV (-1)
 
 
 getFreeTVar :: S.Set TV -> Type -> S.Set TV

@@ -15,12 +15,12 @@ flipInOut (x:xs) = do
     xs <- flipInOut xs
     return $ x:xs
 
-type Gamma = [(M.Map String Type, S.Set Int)]
-type Subst =  M.Map Int Type
-type InferState = ExceptT String (State (Subst, Int))
+type Gamma = [(M.Map String Type, S.Set TV)]
+type Subst =  M.Map TV Type
+type InferState = ExceptT String (State (Subst, TV))
 
 
-isFreeTVarOfGamma :: Gamma -> Int -> Bool
+isFreeTVarOfGamma :: Gamma -> TV -> Bool
 isFreeTVarOfGamma [] _ = False
 isFreeTVarOfGamma ((_, fv):xs) x = 
     if x `S.member` fv then True
@@ -41,17 +41,17 @@ lookupGamma s g = lookupGamma' s (map fst g) where
         Nothing -> lookupGamma' s ds
         Just t -> return t
 
-union :: Int -> Type -> InferState ()
+union :: TV -> Type -> InferState ()
 union k t = if TVar k == t then return () else do
     (subst, g) <- get
     let subst' = M.insert k t subst
     put (subst', g)
 
-genTVar :: InferState Int
+genTVar :: InferState TV
 genTVar = do
-    (s, tv) <- get
-    put (s, tv + 1)
-    return tv
+    (s, TV tv) <- get
+    put (s, TV $ tv + 1)
+    return $ TV tv
 
 inst :: Type -> InferState Type
 inst = inst' M.empty where
@@ -93,7 +93,7 @@ unify a b = do
 
 find :: Type -> InferState Type
 find = find' S.empty where
-    find' :: S.Set Int -> Type -> InferState Type
+    find' :: S.Set TV -> Type -> InferState Type
     find' s t@(TVar v) = if v `S.member` s then throwError "cannot create infinite type" else do
         subst <- fst <$> get
         let s' = S.insert v s
@@ -221,8 +221,8 @@ inferBlockExpr gamma bindings body = do
 
 
 doInfer :: Expr -> Either String (Type, Expr)
-doInfer e = evalState (runExceptT $ infer [] e) (M.empty, 0)
+doInfer e = evalState (runExceptT $ infer [] e) (M.empty, TV 0)
 
 doInferDef def = fmap head $ doInferDefs [def] 
 
-doInferDefs defs = evalState (runExceptT $ inferBindings [] defs) (M.empty, 0)
+doInferDefs defs = evalState (runExceptT $ inferBindings [] defs) (M.empty, TV 0)
