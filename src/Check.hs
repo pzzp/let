@@ -80,7 +80,7 @@ generalize gamma t =
 unify :: Type -> Type -> InferState ()
 unify a b = do
     a <- find a
-    b <- find a
+    b <- find b
     unify' a b where
         unify' (TVar a) y = union a y
         unify' x (TVar b) = union b x
@@ -130,9 +130,10 @@ checkDup = checkDup' S.empty where
 infer :: Gamma -> Expr -> InferState (Type, Expr)
 infer _ e@(Bool _) = return (boolType, e)
 infer _ e@(Int _) = return (intType, e)
-infer gamma e@(Var _ name) = do
-    t <- lookupGamma name gamma >>= inst
-    return (t, e)
+infer gamma (Var _ name) = do
+    t <- lookupGamma name gamma 
+    t' <- inst t
+    return (t', Var t name)
 infer gamma (Lamb _ params body) = do
     checkDup params
     ts <- genTVars params
