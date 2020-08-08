@@ -52,7 +52,7 @@ atom = parens topExpr
    <|> lamb
    <|> block
    <|> ifExpr
-   <|> liftM (A.Var A.toBeTyped) ident
+   <|> liftM A.Var ident
 
 ifExpr = do
     reserved "if"
@@ -72,7 +72,7 @@ lamb = do
     params <- (parens $ commaSep ident) <|> (fmap (:[]) ident)
     reservedOp "=>"
     body <- topExpr
-    return $ A.Lamb A.toBeTyped params body
+    return $ A.Lamb params body
 
 
 binding = def <|> let_ where 
@@ -82,7 +82,7 @@ binding = def <|> let_ where
         params <- parens $ commaSep ident
         reservedOp "="
         body <- topExpr
-        return (A.toBeTyped, name, A.Lamb A.toBeTyped params body)
+        return (A.toBeTyped, name, A.Lamb params body)
     let_ = do
         reserved "let"
         name <- ident

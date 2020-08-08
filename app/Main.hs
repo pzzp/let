@@ -2,6 +2,7 @@ module Main where
 import Check
 import Parser
 import System.IO
+import Cps
 import Lang
 -- import Debug.Trace (trace)
 
@@ -17,10 +18,12 @@ main = do
             print defs
             case doInferDefs defs of
                 Left err -> print err
-                Right bs -> print $ map getBindingType bs
+                Right bs -> do
+                    print bs
         Right (Right expr) -> do
             print expr
             case doInfer expr of
                 Left err -> print err
-                Right (t, _) -> print t
+                Right t -> do
+                    print t
     main

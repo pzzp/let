@@ -84,7 +84,7 @@ unify a b = do
     unify' a b where
         unify' (TVar a) y = union a y
         unify' x (TVar b) = union b x
-        unify' (TFunc ps1 r1) (TFunc ps2 r2) = unifyMany ps1 ps2 >> unify' r1 r2 where
+        unify' (TFunc ps1 r1) (TFunc ps2 r2) = unifyMany ps1 ps2 >> unify r1 r2 where
             unifyMany [] [] = return ()
             unifyMany (x: xs) (y: ys) = unify x y >> unifyMany xs ys
             unifyMany _ _ = throwError "Arity not match"
@@ -127,51 +127,48 @@ checkDup = checkDup' S.empty where
         then throwError $ "Duplicated definition of " ++ x
         else checkDup' (S.insert x s) xs
 
-infer :: Gamma -> Expr -> InferState (Type, Expr)
-infer _ e@(Bool _) = return (boolType, e)
-infer _ e@(Int _) = return (intType, e)
-infer gamma (Var _ name) = do
-    t <- lookupGamma name gamma 
-    t' <- inst t
-    return (t', Var t name)
-infer gamma (Lamb _ params body) = do
+infer :: Gamma -> Expr -> InferState Type
+infer _ e@(Bool _) = return boolType
+infer _ e@(Int _) = return intType
+infer gamma (Var name) = lookupGamma name gamma >>= inst
+infer gamma (Lamb params body) = do
     checkDup params
-    ts <- genTVars params
-    let gamma' =  extendGamma ts gamma
-    (tbody, body) <- infer gamma' body
-    tparams <- flipInOut $ fmap (find . snd) ts
+    ms <- genTVars params
+    let gamma' =  extendGamma ms gamma
+    tbody <- infer gamma' body
+    tparams <- flipInOut $ fmap (find . snd) ms
     let t = TFunc tparams tbody
-    return (t, Lamb (generalize gamma t) params body)
+    return t
 infer gamma (App f args) = do
-    (tf, f) <- infer gamma f
-    (targs, args) <- unzip <$> (flipInOut $ fmap (infer gamma) args)
+    tf <- infer gamma f
+    targs <- flipInOut $ fmap (infer gamma) args
     tr <- TVar <$> genTVar
     unify tf (TFunc targs tr)
     tr <- find tr
-    return (tr, App f args)
-infer gamma (Block defs expr) = do
-    (tbody, bindings, body) <- inferBlockExpr gamma defs expr
-    return (tbody, Block bindings body)
+    return tr
+infer gamma (Block bindings expr) = do
+    (types, names, _) <- unzip3 <$> inferBindings gamma bindings
+    let gamma' = extendGamma (zip names types) gamma
+    infer gamma' expr
 infer gamma (If a b c) = do
-    (ta, a) <- infer gamma a
-    (tb, b) <- infer gamma b
-    (tc, c) <- infer gamma c
+    ta <- infer gamma a
+    tb <- infer gamma b
+    tc <- infer gamma c
     unify boolType ta
     unify tb tc
-    t <- find tc
-    return (t, If a b c)
+    return tc
 infer gamma (UnOp op expr) = do
-    (t, e) <- infer gamma expr
+    t <- infer gamma expr
     let (te, tr) = primUnOpType op
     unify te t
-    return (tr, UnOp op e)
+    return tr
 infer gamma (BinOp op e1 e2) = do
-    (t1, e1) <- infer gamma e1
-    (t2, e2) <- infer gamma e2
+    t1 <- infer gamma e1
+    t2 <- infer gamma e2
     let ((ta, tb), tr) = primBinOpType op
     unify ta t1
     unify tb t2
-    return (tr, BinOp op e1 e2)
+    return tr
 
 primUnOpType "-" = (intType, intType)
 primUnOpType "not" = (boolType, boolType)
@@ -185,9 +182,6 @@ primBinOpType x =
             then ((boolType, boolType), boolType)
             else error (x ++ " is not operator")
 
-isTVar (TVar _) = True
-isTVar (Forall _ (TVar _)) = True
-isTVar _ = False
 
 inferBindings :: Gamma -> [Binding] -> InferState [Binding]
 inferBindings gamma bindings = do
@@ -195,33 +189,25 @@ inferBindings gamma bindings = do
     checkDup names
     ms <- genTVars names
     let gamma' = extendGamma ms gamma
-    bindings <- flipInOut $ fmap (inferBinding gamma') bindings
-    types <- flipInOut $ fmap (find . getBindingType) bindings
-    let infvalues = map (\(_, name, _) -> name) $ filter (\(t, _, _) -> isTVar t) bindings
-    if infvalues /= [] then
-        throwError $ "Cannot create infinite value: " ++ (concat $ intersperse ", " infvalues)
+    (types, names, exprs) <- fmap unzip3 $ flipInOut $ fmap (inferBinding gamma') bindings
+    types <- flipInOut $ fmap find types
+    let types' = map (generalize gamma) types
+    let isInfValue = \ x -> case x of
+                                Forall _ (TVar _) -> True
+                                otherwise -> False
+    let infValues = map snd $ filter (isInfValue . fst) $ zip types' names
+    if infValues /= [] then
+        throwError $ "Cannot create infinite value: " ++ (concat $ intersperse ", " infValues)
     else
-        return bindings
+        return $ zip3 types' names exprs
 
 inferBinding :: Gamma -> Binding -> InferState Binding
 inferBinding gamma (_, name, expr) = do
     t1 <- lookupGamma name gamma
-    (t2, expr) <- infer gamma expr
+    t2 <- infer gamma expr
     unify t1 t2
-    t <- find t2
-    let t' = generalize gamma t
-    return (t', name, expr)
+    return (t1, name, expr)
 
-inferBlockExpr :: Gamma -> [Binding] -> Expr -> InferState (Type, [Binding], Expr)
-inferBlockExpr gamma bindings body = do
-    bindings <- inferBindings gamma bindings
-    let (types, names, _) = unzip3 bindings
-    let gamma' = extendGamma (zip names types) gamma
-    (tbody, body) <- infer gamma' body
-    return (tbody, bindings, body)
-
-
-doInfer :: Expr -> Either String (Type, Expr)
 doInfer e = evalState (runExceptT $ infer [] e) (M.empty, TV 0)
 
 doInferDef def = fmap head $ doInferDefs [def] 
