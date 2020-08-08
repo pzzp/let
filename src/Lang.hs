@@ -10,8 +10,8 @@ import Type
 data Expr = 
     Int Int
    |Bool Bool
-   |Var Type String
-   |Lamb Type [String] Expr
+   |Var String
+   |Lamb [String] Expr
    |App Expr [Expr]
    |Block [Binding] Expr
    |If Expr Expr Expr
