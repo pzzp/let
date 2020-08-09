@@ -72,7 +72,7 @@ lamb = do
     params <- (parens $ commaSep ident) <|> (fmap (:[]) ident)
     reservedOp "=>"
     body <- topExpr
-    return $ A.Lamb params body
+    return $ A.Lamb (zip params $ repeat A.toBeTyped) (body, A.toBeTyped)
 
 
 binding = def <|> let_ where 
@@ -82,7 +82,7 @@ binding = def <|> let_ where
         params <- parens $ commaSep ident
         reservedOp "="
         body <- topExpr
-        return (A.toBeTyped, name, A.Lamb params body)
+        return (A.toBeTyped, name, A.Lamb (zip params $ repeat A.toBeTyped) (body, A.toBeTyped))
     let_ = do
         reserved "let"
         name <- ident

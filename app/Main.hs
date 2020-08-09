@@ -4,6 +4,7 @@ import Parser
 import System.IO
 import Cps
 import Lang
+import Common
 -- import Debug.Trace (trace)
 
 main :: IO ()
@@ -15,15 +16,17 @@ main = do
     case expr of
         Left err -> print err
         Right (Left defs) -> do
-            print defs
+            -- print defs
             case doInferDefs defs of
                 Left err -> print err
                 Right bs -> do
                     print bs
+                    print $ l2clProg bs
         Right (Right expr) -> do
-            print expr
+            -- print expr
             case doInfer expr of
                 Left err -> print err
-                Right t -> do
+                Right (t, expr) -> do
                     print t
+                    print (l2cl emptyGamma expr)
     main

@@ -5,11 +5,9 @@ module CoreLang ( V(..)
                 , Pat(..)) where
 import Type
 import Data.List (intersperse)
+import Debug.Trace (trace)
 
-newtype V = V Int deriving(Eq)
-
-instance Show V where
-       show (V i) = if i < 0 then '$' : show (-i) else '%' : show i
+type V = String 
 
 data Cons a = Int Int
             | Bool Bool
@@ -35,16 +33,20 @@ showOP s es = '(' : s ++ ' ' : sjoin " " (map show es) ++ ")"
 sjoin s = concat . intersperse s
 
 instance Show Expr where
-       show (Var v) = show v
+       show (Var v) = v
        show (Val x) = show x
        show (OP op exprs) = showOP op exprs
        show (Abs params body) =
-              let sparams = sjoin " " $ map (\(v, t) -> show v ++ ':' : show t) params
+              let sparams = case params of 
+                                   [(v, t)] -> v ++ ':': show t
+                                   _ -> '(': (sjoin ", " $ map (\(v, t) -> v ++ ':' : show t) params) ++ ")"
                   sbody = show body
               in "λ" ++ sparams ++ '.' : sbody
        show (TAbs params body) = 
-              let sparams = sjoin " " $ map show params
-                  sbody = show body
+              let sbody = show body
+                  sparams = case params of
+                                   [x] -> show x
+                                   xs -> '(' : (sjoin ", " $ map show params) ++ ")"
               in "Λ" ++ sparams ++ '.' : sbody
        show (App f args) = 
               let sf = if isAbsOrLetR f then '(' : show f ++ ")" else show f

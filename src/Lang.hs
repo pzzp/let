@@ -11,7 +11,7 @@ data Expr =
     Int Int
    |Bool Bool
    |Var String
-   |Lamb [String] Expr
+   |Lamb [(String, Type)] (Expr, Type)
    |App Expr [Expr]
    |Block [Binding] Expr
    |If Expr Expr Expr

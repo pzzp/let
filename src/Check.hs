@@ -4,42 +4,21 @@ import Control.Monad.Except
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Lang
+import qualified CoreLang as CL
 import Data.List (intersperse, partition)
 import Debug.Trace (trace)
+import Common hiding (lookupGamma)
 
 
-flipInOut :: Monad m => [m a] -> m [a]
-flipInOut [] = return []
-flipInOut (x:xs) = do
-    x <- x
-    xs <- flipInOut xs
-    return $ x:xs
-
-type Gamma = [(M.Map String Type, S.Set TV)]
 type Subst =  M.Map TV Type
 type InferState = ExceptT String (State (Subst, TV))
 
 
-isFreeTVarOfGamma :: Gamma -> TV -> Bool
-isFreeTVarOfGamma [] _ = False
-isFreeTVarOfGamma ((_, fv):xs) x = 
-    if x `S.member` fv then True
-    else isFreeTVarOfGamma xs x
-
-
-extendGamma :: [(String, Type)] -> Gamma -> Gamma
-extendGamma ms g = 
-    let fv = foldl getFreeTVar S.empty (map snd ms) 
-        env = M.fromList ms
-    in (env, fv) : g
-
 lookupGamma :: String -> Gamma -> InferState Type
-lookupGamma s g = lookupGamma' s (map fst g) where
-    lookupGamma' :: String -> [M.Map String Type] -> InferState Type
-    lookupGamma' s [] = throwError $ "cannot find variable " ++ s
-    lookupGamma' s (d:ds) = case M.lookup s d of
-        Nothing -> lookupGamma' s ds
+lookupGamma s (env, _) = 
+    case M.lookup s env of
         Just t -> return t
+        Nothing -> throwError $ "cannot find variable " ++ s
 
 union :: TV -> Type -> InferState ()
 union k t = if TVar k == t then return () else do
@@ -127,48 +106,52 @@ checkDup = checkDup' S.empty where
         then throwError $ "Duplicated definition of " ++ x
         else checkDup' (S.insert x s) xs
 
-infer :: Gamma -> Expr -> InferState Type
-infer _ e@(Bool _) = return boolType
-infer _ e@(Int _) = return intType
-infer gamma (Var name) = lookupGamma name gamma >>= inst
-infer gamma (Lamb params body) = do
-    checkDup params
-    ms <- genTVars params
+infer :: Gamma -> Expr -> InferState (Type, Expr)
+infer _ e@(Bool _) = return (boolType, e)
+infer _ e@(Int _) = return (intType, e)
+infer gamma e@(Var name) = do
+    t <- lookupGamma name gamma >>= inst
+    return (t, e)
+infer gamma (Lamb params (body, _)) = do
+    let paramNames =map fst params 
+    checkDup paramNames
+    ms <- genTVars paramNames
     let gamma' =  extendGamma ms gamma
-    tbody <- infer gamma' body
+    (tbody, body) <- infer gamma' body
     tparams <- flipInOut $ fmap (find . snd) ms
     let t = TFunc tparams tbody
-    return t
+    return (t, Lamb (zip paramNames tparams) (body, tbody))
 infer gamma (App f args) = do
-    tf <- infer gamma f
-    targs <- flipInOut $ fmap (infer gamma) args
+    (tf, f) <- infer gamma f
+    (targs, args) <- fmap unzip $ flipInOut $ fmap (infer gamma) args
     tr <- TVar <$> genTVar
     unify tf (TFunc targs tr)
     tr <- find tr
-    return tr
-infer gamma (Block bindings expr) = do
-    (types, names, _) <- unzip3 <$> inferBindings gamma bindings
+    return (tr, App f args)
+infer gamma (Block bindings rexpr) = do
+    (types, names, bexprs) <- unzip3 <$> inferBindings gamma bindings
     let gamma' = extendGamma (zip names types) gamma
-    infer gamma' expr
+    (trexpr, rexpr) <- infer gamma' rexpr
+    return (trexpr, Block (zip3 types names bexprs) rexpr)
 infer gamma (If a b c) = do
-    ta <- infer gamma a
-    tb <- infer gamma b
-    tc <- infer gamma c
+    (ta, a) <- infer gamma a
+    (tb, b) <- infer gamma b
+    (tc, c) <- infer gamma c
     unify boolType ta
     unify tb tc
-    return tc
+    return (tc, If a b c)
 infer gamma (UnOp op expr) = do
-    t <- infer gamma expr
+    (t, expr) <- infer gamma expr
     let (te, tr) = primUnOpType op
     unify te t
-    return tr
+    return (tr, UnOp op expr)
 infer gamma (BinOp op e1 e2) = do
-    t1 <- infer gamma e1
-    t2 <- infer gamma e2
+    (t1, e1) <- infer gamma e1
+    (t2, e2) <- infer gamma e2
     let ((ta, tb), tr) = primBinOpType op
     unify ta t1
     unify tb t2
-    return tr
+    return (tr, BinOp op e1 e2)
 
 primUnOpType "-" = (intType, intType)
 primUnOpType "not" = (boolType, boolType)
@@ -204,12 +187,71 @@ inferBindings gamma bindings = do
 inferBinding :: Gamma -> Binding -> InferState Binding
 inferBinding gamma (_, name, expr) = do
     t1 <- lookupGamma name gamma
-    t2 <- infer gamma expr
+    (t2, expr) <- infer gamma expr
     unify t1 t2
     return (t1, name, expr)
 
-doInfer e = evalState (runExceptT $ infer [] e) (M.empty, TV 0)
+f :: Gamma -> Expr -> InferState (Type, Expr)
+f _ e@(Bool _) = return (boolType, e)
+f _ e@(Int _) = return (intType, e)
+f gamma v@(Var x) = do
+    t <- lookupGamma x gamma
+    t <- find t >>= inst
+    return (t, v)
+f gamma (Lamb params (body, rtype)) = do
+    let (paramNames, tparams) = unzip params
+    tparams <- flipInOut $ map find tparams
+    let params' = zip paramNames tparams
+    let gamma' = extendGamma params' gamma
+    (tbody, body) <- f gamma' body
+    let t = TFunc tparams tbody
+    return (t, Lamb params' (body, tbody))
+f gamma (App fun args) = do
+    (tfun, fun) <- f gamma fun
+    (targs, args) <- fmap unzip $ flipInOut $ map (f gamma) args
+    let TFunc tparams tr = tfun
+    let t = case lookup tr (zip tparams targs) of
+                Nothing -> tr
+                Just x -> x
+    return (t, App fun args)
+f gamma (Block bindings rexpr) = do
+    bindings <- f_bindings gamma bindings
+    let (types, names, bexprs) = unzip3 bindings
+    let gamma' = extendGamma (zip names types) gamma
+    (trexpr, rexpr)  <- f gamma' rexpr
+    return (trexpr, Block bindings rexpr)
+f gamma (If a b c) = do
+    (ta, a) <- f gamma a
+    (tb, b) <- f gamma b
+    (tc, c) <- f gamma c
+    return (tc, If a b c)
+f gamma (UnOp op expr) = do
+    (t, expr) <- f gamma expr
+    let (te, tr) = primUnOpType op
+    return (tr, UnOp op expr)
+f gamma (BinOp op e1 e2) = do
+    (t1, e1) <- f gamma e1
+    (t2, e2) <- f gamma e2
+    let ((ta, tb), tr) = primBinOpType op
+    return (tr, BinOp op e1 e2)
 
-doInferDef def = fmap head $ doInferDefs [def] 
+f_bindings gamma bindings = do
+    let (types, names, bexprs) = unzip3 bindings
+    types <- flipInOut $ map find types
+    let gamma' = extendGamma (zip names types) gamma
+    (tbexprs, bexprs) <- fmap unzip $ flipInOut $ map (f gamma') bexprs
+    return $ zip3 types names bexprs
 
-doInferDefs defs = evalState (runExceptT $ inferBindings [] defs) (M.empty, TV 0)
+
+doInfer e = 
+    case runState (runExceptT $ infer (M.empty, S.empty) e) (M.empty, TV 0) of
+        (Left err, _) -> Left err
+        (Right (t, expr), (subst, _)) -> evalState (runExceptT $ f (M.empty, S.empty) expr) (subst, TV 0)
+
+
+doInferDefs defs = 
+    case runState (runExceptT $ inferBindings (M.empty, S.empty) defs) (M.empty, TV 0) of
+        (Left err, _) -> Left err
+        (Right bindings, (subst, _)) -> evalState (runExceptT $ f_bindings (M.empty, S.empty) bindings) (subst, TV 0)
+
+
