@@ -39,12 +39,12 @@ inst = inst' M.empty where
             Just t ->  TVar t
             Nothing -> t
     inst' m (TFunc p r) = do
-        p <- flipInOut $ fmap (inst' m) p
+        p <- mapM (inst' m) p
         r <- inst' m r
         return $ TFunc p r
     inst' m (Forall bs b) = do 
-        let (bs', monads) = unzip $ (zip bs $ repeat genTVar)
-        newtv <- flipInOut monads
+        let f = \x -> (,) x <$> genTVar
+        (bs', newtv) <- unzip <$> mapM f bs
         let ins (a, b) =  M.insert a b
         let m' = foldr ins m $ zip bs' newtv
         inst' m' b
@@ -83,7 +83,7 @@ find = find' S.empty where
                 union v t
                 return t
     find' s (TFunc ps r) = do
-        ps <- flipInOut $ fmap (find' s) ps
+        ps <- mapM (find' s) ps
         r <- find' s r
         return $ TFunc ps r
     find' s (Forall xs t) = find' s t >>= return . Forall xs
@@ -118,12 +118,12 @@ infer gamma (Lamb params (body, _)) = do
     ms <- genTVars paramNames
     let gamma' =  extendGamma ms gamma
     (tbody, body) <- infer gamma' body
-    tparams <- flipInOut $ fmap (find . snd) ms
+    tparams <- mapM (find . snd) ms
     let t = TFunc tparams tbody
     return (t, Lamb (zip paramNames tparams) (body, tbody))
 infer gamma (App f args) = do
     (tf, f) <- infer gamma f
-    (targs, args) <- fmap unzip $ flipInOut $ fmap (infer gamma) args
+    (targs, args) <- fmap unzip $ mapM (infer gamma) args
     tr <- TVar <$> genTVar
     unify tf (TFunc targs tr)
     tr <- find tr
@@ -172,8 +172,8 @@ inferBindings gamma bindings = do
     checkDup names
     ms <- genTVars names
     let gamma' = extendGamma ms gamma
-    (types, names, exprs) <- fmap unzip3 $ flipInOut $ fmap (inferBinding gamma') bindings
-    types <- flipInOut $ fmap find types
+    (types, names, exprs) <- fmap unzip3 $ mapM (inferBinding gamma') bindings
+    types <- mapM find types
     let types' = map (generalize gamma) types
     let isInfValue = \ x -> case x of
                                 Forall _ (TVar _) -> True
@@ -200,7 +200,7 @@ f gamma v@(Var x) = do
     return (t, v)
 f gamma (Lamb params (body, rtype)) = do
     let (paramNames, tparams) = unzip params
-    tparams <- flipInOut $ map find tparams
+    tparams <- mapM find tparams
     let params' = zip paramNames tparams
     let gamma' = extendGamma params' gamma
     (tbody, body) <- f gamma' body
@@ -208,7 +208,7 @@ f gamma (Lamb params (body, rtype)) = do
     return (t, Lamb params' (body, tbody))
 f gamma (App fun args) = do
     (tfun, fun) <- f gamma fun
-    (targs, args) <- fmap unzip $ flipInOut $ map (f gamma) args
+    (targs, args) <- fmap unzip $ mapM (f gamma) args
     let TFunc tparams tr = tfun
     let t = case lookup tr (zip tparams targs) of
                 Nothing -> tr
@@ -237,9 +237,9 @@ f gamma (BinOp op e1 e2) = do
 
 f_bindings gamma bindings = do
     let (types, names, bexprs) = unzip3 bindings
-    types <- flipInOut $ map find types
+    types <- mapM find types
     let gamma' = extendGamma (zip names types) gamma
-    (tbexprs, bexprs) <- fmap unzip $ flipInOut $ map (f gamma') bexprs
+    (tbexprs, bexprs) <- fmap unzip $ mapM (f gamma') bexprs
     return $ zip3 types names bexprs
 
 

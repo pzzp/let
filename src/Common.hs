@@ -4,16 +4,6 @@ import qualified Data.Set as S
 import Type
 
 
-
-
-
-flipInOut :: Monad m => [m a] -> m [a]
-flipInOut [] = return []
-flipInOut (x:xs) = do
-    x <- x
-    xs <- flipInOut xs
-    return $ x:xs
-
 type Gamma = (M.Map String Type, S.Set TV)
 
 emptyGamma :: Gamma
