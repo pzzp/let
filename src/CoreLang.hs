@@ -1,4 +1,4 @@
-module CoreLang ( V(..)
+module CoreLang ( Name(..)
                 , Cons(..)
                 , Expr(..)
                 , module Type
@@ -7,7 +7,8 @@ import Type
 import Data.List (intersperse)
 import Debug.Trace (trace)
 
-type V = String 
+
+type Name = String
 
 data Cons a = Int Int
             | Bool Bool
@@ -17,14 +18,14 @@ instance Show (Cons a) where
        show (Int x) = show x
        show (Bool x) = show x
 
-data Expr = Var V
+data Expr = Var Name
           | Val (Cons Expr)
           | OP String [Expr]
-          | Abs [(V, Type)] Expr 
+          | Abs [(Name, Type)] Expr 
           | TAbs [TV] Expr
           | App Expr [Expr]
           | TApp Expr [Type]
-          | LetR [(V, Type, Expr)] Expr
+          | LetR [((Name, Type), Expr)] Expr
           | Case Expr [(Pat, Expr)]
        deriving(Eq)
 
@@ -58,7 +59,7 @@ instance Show Expr where
               in sf ++ '<':sargs ++ ">"
        show (LetR bindings body) = "let " ++ showBindings bindings ++ " in " ++ show body where
               showBindings bindings = "{" ++ sjoin ", " (map showbinding bindings) ++ "}"
-              showbinding (v, t, e) = show v ++ ':' : show t ++ " = " ++ show e
+              showbinding ((v, t), e) = show v ++ ':' : show t ++ " = " ++ show e
        show (Case e cs) = "case " ++ show e ++ ' ' : showCS cs where
               showCS cs =  "{" ++ sjoin " | " (map showC cs) ++ "}"
               showC (p, e) = show p ++ "->" ++ show e
@@ -77,7 +78,7 @@ isAbsLetROrApp _ = False
 
 data Pat = C (Cons Pat)
          | Wildcard 
-         | PV V deriving (Eq)
+         | PV Name deriving (Eq)
 
 instance Show Pat where
        show (C x) = show x

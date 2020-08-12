@@ -8,7 +8,11 @@ import Data.Maybe (fromMaybe)
 newtype TV = TV Int deriving (Eq, Ord)
 
 instance Show TV where
-    show (TV x) = if x == -1 then "" else if x < 26 then [toEnum (fromEnum 'A' + x)] else "T" ++ show (x - 26)
+    show (TV x) = 
+        if x < -1 then 'k' : show (-x - 2) -- (-∞, -2], used by contiuation
+        else if x == -1 then ""
+        else if x < 26 then [toEnum (fromEnum 'A' + x)] 
+        else "T" ++ show (x - 26)
 
 data Type = 
     TCons String
