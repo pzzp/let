@@ -71,7 +71,7 @@ l2cl' gamma (L.App f args) = -- TODO
                 app = case argsOfTabs of
                         [] -> App f' args'
                         _ -> App (TApp f' argsOfTabs) args'
-            in trace ("app= " ++ show app) (app, r')
+            in (app, r')
 l2cl' gamma (L.Block bindings body) = 
     let (types, names, bexprs) = unzip3 bindings
         gamma' = extendGamma (zip names types) gamma
@@ -170,7 +170,7 @@ cps gamma (TApp tabs targs) = do
     (tabsTrans, tabsType) <- cps gamma tabs
     let (Forall tvs tbody) = tabsType
     let t = tsub (M.fromList $ zip tvs targs) tbody
-    trace ("tabs=" ++ show tabs)return (\k -> k $ TApp (tabsTrans id) targs, t)
+    return (\k -> k $ TApp (tabsTrans id) targs, t)
 cps gamma (LetR bindings expr) = do
     let (nameAndTypes, bexprs) = unzip bindings
     let gamma' = extendGamma nameAndTypes gamma
